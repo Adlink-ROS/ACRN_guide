@@ -128,7 +128,7 @@ Create User VM image Windows10
 
 #. Select your ISO image path.
 
-   .. figure:: images/rqi-acrn-kvm-choose-iso_win.png
+   .. figure:: images/rqi-acrn-kvm-choose-iso-win.png
 
 #. Select CPU and RAM for the VM.  
 
