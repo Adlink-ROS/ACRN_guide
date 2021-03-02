@@ -302,9 +302,6 @@ Update Grub
 Install User VM
 ***************
 
-*If you want to install User VM with Windows 10 please ignore this part and install User OS with windows refer to the file installation_guide_Windows_uos.rst.*
-*After the installation of User OS with Windows, please continue the installation from **Install real-time VM**.*
-
 Before create User VM
 =====================
 

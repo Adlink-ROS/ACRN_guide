@@ -1,19 +1,15 @@
-Install UserOS with Windows 10 
-###############################################################
-
- This doument only contains the installation guide of UOS with Windows 10.
-
- The installation guide of the ServiceOS and RTOS_ubuntu please refer to the file **installation_guide.rst**.
-
+Getting Started Guide for ACRN Industry Scenario with ROScube-I and Windows 10 User VM1
+#######################################################################################
 
 .. contents::
    :local:
-   :depth: 2
+   :depth: 1
 
 Verified version
 ****************
 
 - Ubuntu version: **18.04**
+- Windows Version: **Windows 10-LTSC**
 - GCC version: **7.5.0**
 - ACRN-hypervisor branch: **v2.1**
 - ACRN-Kernel (Service VM kernel): **v2.1**
@@ -31,6 +27,46 @@ Verified version
 .. _ROS 2:
    https://index.ros.org/doc/ros2/
 
+Architecture
+************
+
+Please refer to `Architecture`_ in installation_guide.rst.
+
+.. _Architecture:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#architecture
+
+Prerequisites
+*************
+
+Please refer to `Prerequisites`_ in installation_guide.rst.
+
+.. _Prerequisites:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#Prerequisites
+
+
+Install ACRN hypervisor
+***********************
+
+Please refer to `Install ACRN hypervisor`_ in installation_guide.rst.
+
+.. _Install ACRN hypervisor:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#install-acrn-hypervisor
+
+Install Service VM kernel
+*************************
+
+Please refer to `Install Service VM kernel`_ in installation_guide.rst.
+
+.. _Install Service VM kernel:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#install-service-vm-kernel
+
+Install real-time VM
+********************
+
+Please refer to `Install real-time VM`_ in installation_guide.rst.
+
+.. _Install real-time VM:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#install-real-time-vm
 
 Install User VM Windows
 ***********************
@@ -218,9 +254,6 @@ Create User VM image Windows10
 
 **Now we are ready to convert image as ACRN readable type, and launch through ACRN VMM.**
 
-Launch User VM Windows
-************************
-
 Convert Image File Format
 =========================
 
@@ -235,8 +268,8 @@ Convert Image File Format
    .. code-block:: bash
 
       sudo qemu-img convert -f qcow2 -O raw /var/lib/libvirt/images/<your image name>.qcow2 ./<your image name>.img
-
-  for example:
+  
+   for example:
 
    .. code-block:: bash
 
@@ -245,120 +278,12 @@ Convert Image File Format
 Prepare a Launch Script File for Windows-UOS
 ============================================
 
-#. Create a winUOS launch file.
-
    .. code-block:: bash
 
-      touch launch_win_uos.sh
+      cd ~/acrn/uosWinVM
+      wget https://raw.githubusercontent.com/Adlink-ROS/ROScube_ACRN_guide/v2.1/scripts/launch_win_uos.sh
       chmod +x ./launch_win_uos.sh
 
-#. Edit launch file.
-
-   .. code-block:: bash
-
-      gedit launch_win_uos.sh
-   
-#. Copy and paste the next code block contents to the launch file and save it.
-
-   .. code-block:: bash
-
-      #!/bin/bash
-      # board: ROS-CUBE-CFL, scenario: INDUSTRY_ROS2SYSTEMOS, uos: WIN10
-      # pci devices for passthru
-      declare -A passthru_vpid
-      declare -A passthru_bdf
-
-      passthru_vpid=(
-      ["gpu"]="8086 3e9b"
-      )
-      passthru_bdf=(
-      ["gpu"]="0000:00:02.0"
-      )
-
-      function tap_net() {
-      # create a unique tap device for each VM
-      tap=$1
-      tap_exist=$(ip a | grep "$tap" | awk '{print $1}')
-      if [ "$tap_exist"x != "x" ]; then
-        echo "tap device existed, reuse $tap"
-      else
-        ip tuntap add dev $tap mode tap
-      fi
-
-      # if acrn-br0 exists, add VM's unique tap device under it
-      br_exist=$(ip a | grep acrn-br0 | awk '{print $1}')
-      if [ "$br_exist"x != "x" -a "$tap_exist"x = "x" ]; then
-        echo "acrn-br0 bridge aleady exists, adding new tap device to it..."
-        ip link set "$tap" master acrn-br0
-        ip link set dev "$tap" down
-        ip link set dev "$tap" up
-      fi
-      }
-
-      function launch_win() {
-      #vm-name used to generate uos-mac address
-      mac=$(cat /sys/class/net/e*/address)
-      vm_name=win_vm$1
-      mac_seed=${mac:0:17}-${vm_name}
-
-      #check if the vm is running or not
-      vm_ps=$(pgrep -a -f acrn-dm)
-      result=$(echo $vm_ps | grep "${vm_name}")
-      if [[ "$result" != "" ]]; then
-        echo "$vm_name is running, can't create twice!"
-        exit
-      fi
-
-      modprobe pci_stub
-      echo ${passthru_vpid["gpu"]} > /sys/bus/pci/drivers/pci-stub/new_id
-      echo ${passthru_bdf["gpu"]} > /sys/bus/pci/devices/${passthru_bdf["gpu"]}/driver/unbind
-      echo ${passthru_bdf["gpu"]} > /sys/bus/pci/drivers/pci-stub/bind
-
-      #interrupt storm monitor for pass-through devices, params order:
-      #threshold/s,probe-period(s),intr-inject-delay-time(ms),delay-duration(ms)
-      intr_storm_monitor="--intr_monitor 10000,10,1,100"
-
-      #for pm by vuart setting
-      pm_channel="--pm_notify_channel uart "
-      pm_by_vuart="--pm_by_vuart pty,/run/acrn/life_mngr_"$vm_name
-      pm_vuart_node=" -s 1:0,lpc -l com2,/run/acrn/life_mngr_"$vm_name
-
-      # for virt net setting
-      tap_id=tap_win_vm$1
-      tap_net ${tap_id}
-
-      #for memsize setting
-      mem_size=8192M
-
-      acrn-dm -A -m $mem_size -s 0:0,hostbridge -U d2795438-25d6-11e8-864e-cb7a18b34643 \
-        --mac_seed $mac_seed \
-        -s 2,passthru,00/02/0,gpu \
-        -s 3,virtio-blk,./win10-ltsc.img \
-        -s 4,virtio-hyper_dmabuf \
-        -s 5,virtio-rnd \
-        -s 6,virtio-net,${tap_id} \
-        -s 7,xhci,1-1:1-2 \
-        --cpu_affinity 1,2,3 \
-        --ovmf ./OVMF_GOP.fd \
-        --windows \
-        $pm_channel $pm_by_vuart $pm_vuart_node \
-        $intr_storm_monitor \
-        $vm_name
-
-      }
-
-      # offline SOS CPUs except BSP before launch UOS
-      for i in `ls -d /sys/devices/system/cpu/cpu[1-99]`; do
-              online=`cat $i/online`
-              idx=`echo $i | tr -cd "[1-99]"`
-              echo cpu$idx online=$online
-              if [ "$online" = "1" ]; then
-                      echo 0 > $i/online
-                      echo $idx > /sys/class/vhm/acrn_vhm/offline_cpu
-              fi
-      done
-
-      launch_win 1 "64 448 8"
 
 Hardware Resources Distribution
 ===============================
@@ -366,7 +291,7 @@ Hardware Resources Distribution
 Most of resources distribution rules are the same as **ACRN UOS Ubuntu Launch and Guide**, please refer to it for details. We are not to do the same description here.
 
 *Important Notice*
-=====================
+===================
 
 **Close or exit terminal will not terminate the VM when launching VM successful. You need to run "poweroff" or "shutdown now -h" command in the VM.**
 
@@ -461,6 +386,10 @@ Open any one of browser, then goolge Intel DCH Driver, download and install it.
    https://downloadcenter.intel.com/download/29988/Intel-Graphics-Windows-10-DCH-Drivers?v=t
 
 
-Done installing
-===============
-Please continue the installation part in the file **installation_guide.rst**.
+Customizing the launch file
+***************************
+
+Please refer to `Customizing the launch file`_ in installation_guide.rst.
+
+.. _Customizing the launch file:
+   https://github.com/Adlink-ROS/ROScube_ACRN_guide/blob/master/installation_guide.rst#customizing-the-launch-file
